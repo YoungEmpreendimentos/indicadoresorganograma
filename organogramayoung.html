@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organograma Interativo - Young Empreendimentos</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos Gerais */
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            margin: 0;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        #chart-container {
+            width: 100%;
+            overflow: auto; /* Permite scroll se o gráfico for muito largo */
+        }
+        
+        /* Estilos do Organograma (D3.js) */
+        .node {
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .node:hover {
+            transform: scale(1.05);
+        }
+
+        .node-rect {
+            stroke: #999;
+            stroke-width: 1px;
+            rx: 8; /* Bordas arredondadas */
+            ry: 8;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .node-text {
+            font-size: 12px; /* Reduzido para melhor ajuste */
+            fill: #ffffff;
+            font-weight: 500;
+            pointer-events: none; /* Texto não interfere com cliques */
+        }
+
+        .node-text .name {
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .node-text .meta-info {
+            font-size: 12px;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        /* Tooltip (caixa de informações) */
+        .tooltip {
+            position: absolute;
+            visibility: hidden;
+            background-color: #2c3e50;
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        #loading-message {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        /* Botão de Análise IA */
+        .ai-button {
+            cursor: pointer;
+            fill: rgba(255, 255, 255, 0.8);
+            transition: fill 0.3s ease;
+        }
+        .ai-button:hover {
+            fill: #ffffff;
+        }
+        
+        /* Modal de Análise */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .modal-title {
+            font-size: 22px;
+            color: #2c3e50;
+            margin: 0;
+        }
+        .modal-close {
+            cursor: pointer;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            border: none;
+            background: transparent;
+        }
+        .modal-close:hover {
+            color: #333;
+        }
+        .modal-body {
+            line-height: 1.6;
+        }
+        .modal-body ul {
+            padding-left: 20px;
+        }
+        .modal-body li {
+            margin-bottom: 10px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Organograma Estratégico</h1>
+    <p id="info-mes" style="color: #666; margin-bottom: 20px;"></p>
+    <div id="chart-container">
+        <p id="loading-message">Carregando dados da planilha... (Certifique-se que a partilha está como "Qualquer pessoa com o link")</p>
+        <svg id="org-chart"></svg>
+    </div>
+    <div class="tooltip"></div>
+
+    <!-- Modal para Análise IA -->
+    <div id="ai-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title" class="modal-title">Análise de Desempenho</h2>
+                <button id="modal-close-btn" class="modal-close">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body">
+                <!-- Conteúdo da análise será inserido aqui -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ##################################################################
+        // # URL da planilha (aba Organograma) - FORMATO ATUALIZADO         #
+        // ##################################################################
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw/export?format=csv&gid=143720029';
+
+        // --- Configurações do Gráfico ---
+        const width = window.innerWidth * 0.95;
+        const nodeWidth = 220;
+        const nodeHeight = 120;
+        const verticalMargin = 60; // Aumentado para dar espaço ao texto
+        const horizontalMargin = 30;
+
+        // --- Paleta de Cores ---
+        const colors = {
+            success: '#27ae60',
+            danger: '#c0392b',
+            root: '#2c3e50',
+            objective: '#34495e',
+            Comercial: '#f39c12',
+            'Financeiro/ADM': '#7f8c8d',
+            Projetos: '#2980b9',
+            RH: '#8e44ad',
+            default: '#95a5a6'
+        };
+        
+        const svg = d3.select("#org-chart");
+        const tooltip = d3.select(".tooltip");
+        const g = svg.append("g");
+        const zoom = d3.zoom().on("zoom", (event) => g.attr("transform", event.transform));
+        svg.call(zoom);
+
+        // --- Lógica Principal ---
+        async function drawChart() {
+            try {
+                const rawData = await d3.csv(csvUrl);
+                if (rawData.length === 0) {
+                     document.getElementById('loading-message').innerText = 'Nenhum dado encontrado.';
+                     return;
+                }
+                const data = processData(rawData);
+                if (data.length === 0) {
+                     document.getElementById('loading-message').innerText = 'Nenhum dado para o mês mais recente.';
+                     return;
+                }
+                document.getElementById('loading-message').style.display = 'none';
+                document.getElementById('info-mes').innerText = `Exibindo dados de: ${data[0].Mês}`;
+                const root = buildHierarchy(data);
+                update(root, root);
+            } catch (error) {
+                console.error("Erro ao carregar ou processar os dados:", error);
+                document.getElementById('loading-message').innerText = 'Falha ao carregar os dados. Verifique o link da planilha e as permissões de partilha.';
+            }
+        }
+        
+        function processData(rawData) {
+            const parsedData = rawData.map(d => {
+                const mesSplit = d.Mês ? d.Mês.split('/') : null;
+                if (!mesSplit || mesSplit.length < 2) return null;
+                const [mes, ano] = mesSplit;
+                const monthMap = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
+                return {
+                    ...d,
+                    date: new Date(ano, monthMap[mes.toLowerCase()]),
+                    Meta: d.Meta && d.Meta.trim() !== '' ? parseFloat(d.Meta.replace(',', '.')) : null,
+                    Resultados: d.Resultados && d.Resultados.trim() !== '' ? parseFloat(d.Resultados.replace(',', '.')) : null
+                };
+            }).filter(d => d && d.Principal && d.Subordinados);
+
+            if(parsedData.length === 0) return [];
+            const latestDate = new Date(Math.max.apply(null, parsedData.map(d => d.date)));
+            return parsedData.filter(d => d.date.getTime() === latestDate.getTime());
+        }
+
+        function buildHierarchy(data) {
+            const flatData = [{ id: 'Young Empreendimentos', parentId: '', data: { Nível: 'Empresa', Time: 'Young' } }];
+            const itemMap = new Map();
+            data.forEach(d => {
+                if (!itemMap.has(d.Principal)) {
+                    itemMap.set(d.Principal, true);
+                    flatData.push({ id: d.Principal, parentId: 'Young Empreendimentos', data: { Nível: 'Objetivo Estratégico', Time: d.Time } });
+                }
+                flatData.push({ id: `${d.Principal}-${d.Subordinados}`, parentId: d.Principal, data: { ...d, Nome: d.Subordinados } });
+            });
+            
+            const root = d3.stratify().id(d => d.id).parentId(d => d.parentId)(flatData);
+            root.x0 = 0;
+            root.y0 = 0;
+            return root;
+        }
+
+        function update(source, rootNode) {
+            const treeLayout = d3.tree().nodeSize([nodeWidth + horizontalMargin, nodeHeight + verticalMargin]);
+            const hierarchy = treeLayout(d3.hierarchy(rootNode));
+            const nodes = hierarchy.descendants();
+            const links = hierarchy.links();
+
+            let maxDepth = 0;
+            nodes.forEach(d => { if(d.depth > maxDepth) maxDepth = d.depth; });
+            svg.attr("height", (maxDepth + 1) * (nodeHeight + verticalMargin));
+            g.attr("transform", `translate(${width / 2}, ${verticalMargin * 1.5})`);
+
+            const duration = 500;
+
+            const node = g.selectAll("g.node").data(nodes, d => d.id || (d.id = d.data.id));
+
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "node")
+                .attr("transform", `translate(${source.y0}, ${source.x0})`)
+                .on("click", (event, d) => {
+                    if (event.target.classList.contains('ai-button-shape')) return;
+                    toggleChildren(d);
+                    update(d, rootNode);
+                })
+                .on("mouseover", (event, d) => {
+                    tooltip.style("visibility", "visible").style("opacity", 1)
+                           .html(`<b>Time:</b> ${d.data.data.Time}<br><b>Nível:</b> ${d.data.data.Nível}`);
+                })
+                .on("mousemove", (event) => tooltip.style("top", (event.pageY - 10) + "px").style("left", (event.pageX + 10) + "px"))
+                .on("mouseout", () => tooltip.style("visibility", "hidden").style("opacity", 0));
+
+            nodeEnter.append("rect")
+                .attr("class", "node-rect")
+                .attr("width", nodeWidth)
+                .attr("height", nodeHeight)
+                .attr("x", -nodeWidth / 2)
+                .attr("y", -nodeHeight / 2)
+                .style("fill", d => getNodeColor(d.data.data));
+
+            const textEnter = nodeEnter.append("text")
+                .attr("class", "node-text")
+                .attr("text-anchor", "middle");
+            
+            textEnter.append("tspan")
+                .attr("class", "name")
+                .attr("x", 0)
+                .attr("y", -nodeHeight/2 + 20)
+                .text(d => d.data.data.Nome || d.data.id)
+                .call(wrapText, nodeWidth - 20); // Função para quebrar texto
+            
+            textEnter.filter(d => d.data.data.Meta !== null)
+                .append("tspan").attr("class", "meta-info").attr("x", 0).attr("y", nodeHeight/2 - 35)
+                .text(d => `Meta: ${d.data.data.Meta}`);
+            
+            textEnter.filter(d => d.data.data.Resultados !== null)
+                .append("tspan").attr("class", "meta-info").attr("x", 0).attr("y", nodeHeight/2 - 15)
+                .text(d => `Resultado: ${d.data.data.Resultados}`);
+
+            const aiButton = nodeEnter.filter(d => d.data.data.Meta !== null && d.data.data.Resultados !== null)
+                .append("g")
+                .attr("class", "ai-button")
+                .attr("transform", `translate(${nodeWidth / 2 - 22}, ${-nodeHeight / 2 + 22})`)
+                .on("click", (event, d) => {
+                    event.stopPropagation();
+                    handleAnalysisClick(d.data.data);
+                });
+
+            aiButton.append("circle").attr("r", 15).attr("fill", "rgba(0,0,0,0.2)").attr("class", "ai-button-shape");
+            aiButton.append("text").attr("text-anchor", "middle").attr("dy", "0.35em").text("✨").style("font-size", "18px");
+
+            const nodeUpdate = nodeEnter.merge(node);
+            nodeUpdate.transition().duration(duration).attr("transform", d => `translate(${d.y}, ${d.x})`);
+            node.exit().transition().duration(duration).attr("transform", `translate(${source.y}, ${source.x})`).remove();
+
+            const link = g.selectAll("path.link").data(links, d => d.target.id);
+            const linkEnter = link.enter().insert("path", "g").attr("class", "link").attr("d", d3.linkVertical().x(d => source.y0).y(d => source.x0));
+            linkEnter.merge(link).transition().duration(duration).attr("d", d3.linkVertical().x(d => d.y).y(d => d.x).source(d => ({x: d.source.x, y: d.source.y + nodeHeight / 2})).target(d => ({x: d.target.x, y: d.target.y - nodeHeight / 2})));
+            link.exit().transition().duration(duration).attr("d", d3.linkVertical().x(d => source.y).y(d => source.x)).remove();
+
+            nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+        }
+        
+        // --- FUNÇÃO PARA QUEBRAR O TEXTO ---
+        function wrapText(selection, width) {
+            selection.each(function() {
+                let text = d3.select(this),
+                    words = text.text().split(/\s+/).reverse(),
+                    word,
+                    line = [],
+                    lineNumber = 0,
+                    lineHeight = 1.1, // ems
+                    y = text.attr("y"),
+                    tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y);
+                while (word = words.pop()) {
+                    line.push(word);
+                    tspan.text(line.join(" "));
+                    if (tspan.node().getComputedTextLength() > width) {
+                        line.pop();
+                        tspan.text(line.join(" "));
+                        line = [word];
+                        tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + "em").text(word);
+                    }
+                }
+            });
+        }
+
+        function getNodeColor(d) {
+            if (d.Meta !== null && d.Resultados !== null) {
+                return d.Resultados >= d.Meta ? colors.success : colors.danger;
+            }
+            if (d.Nível === 'Empresa') return colors.root;
+            if (d.Nível === 'Objetivo Estratégico') return colors.objective;
+            return colors[d.Time] || colors.default;
+        }
+
+        function toggleChildren(d) {
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+        }
+
+        // --- Lógica do Modal e Gemini API ---
+        const modal = document.getElementById('ai-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        function showModal() { modal.classList.add('visible'); }
+        function hideModal() { modal.classList.remove('visible'); }
+        modalCloseBtn.addEventListener('click', hideModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+
+        async function handleAnalysisClick(kpiData) {
+            showModal();
+            modalTitle.innerText = `Analisando: ${kpiData.Nome}`;
+            modalBody.innerHTML = '<div class="loader"></div><p style="text-align:center;">Aguarde, a IA está a gerar o plano de ação...</p>';
+            
+            const prompt = `
+                Você é um consultor de negócios da empresa Young Empreendimentos. Analise o seguinte Indicador de Desempenho (KPI) para a equipe ${kpiData.Time}.
+
+                - Indicador: ${kpiData.Nome}
+                - Meta: ${kpiData.Meta}
+                - Resultado Atual: ${kpiData.Resultados}
+
+                Com base nesses números, forneça:
+                1. Uma análise concisa (2-3 frases) sobre o desempenho.
+                2. Um plano de ação com 3 a 4 itens em formato de lista (bullet points) com sugestões práticas para melhorar ou manter este resultado.
+
+                Seja específico e use um tom profissional e motivador. Responda em português do Brasil.
+                Formate a sua resposta com um parágrafo para a análise e uma lista com marcadores para o plano de ação, usando a sintaxe de markdown (por exemplo, use * para os itens da lista).
+            `;
+
+            try {
+                const resultText = await callGeminiAPI(prompt);
+                const formattedHtml = resultText
+                    .replace(/\*\s/g, '<li>') 
+                    .replace(/^(?!<li>)(.+)$/gm, '<p>$1</p>') 
+                    .replace(/<li>/g, '<ul><li>') 
+                    .replace(/<\/p>(\s*<ul>)/g, '$1')
+                    .replace(/(<\/li>)(\s*<p>)/g, '$1</ul><p>') + '</ul>';
+
+                modalBody.innerHTML = formattedHtml.replace(/<\/li><ul>/g, '</li>');
+
+            } catch (error) {
+                console.error('Erro na API Gemini:', error);
+                modalBody.innerHTML = '<p style="color:red;">Ocorreu um erro ao tentar gerar a análise. Por favor, tente novamente mais tarde.</p>';
+            }
+        }
+
+        async function callGeminiAPI(prompt) {
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) { throw new Error(`API Error: ${response.statusText}`); }
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error("Resposta da API inválida ou vazia.");
+            }
+        }
+
+        drawChart();
+    </script>
+</body>
+</html>
