@@ -72,7 +72,6 @@
       treeData.addColumn('string', 'ToolTip');
 
       treeData.addRows(filtered.map(row => {
-        let content = `<div style='padding:5px;'><strong>${row['Indicador']}</strong><br/>Nível: ${row['Nível']}<br/>Resultado: ${row['Resultado']} / Meta: ${row['Meta']}</div>`;
         let color = 'lightgray';
 
         if (row['Resultado'] && row['Meta']) {
@@ -88,7 +87,6 @@
             <div>${row['Indicador'] || row['Objetivo'] || row['Empresa']}</div>
             <div style='font-size: 11px;'>Nível: ${row['Nível'] || '---'}</div>
             <div style='font-size: 11px;'>Resultado: ${row['Resultado'] || '-'} / Meta: ${row['Meta'] || '-'}</div>
-            ${row['Meta'] && row['Resultado'] ? `<div><span onclick="openAIModal('${row['Indicador']}')">✨</span></div>` : ''}
           </div>
         `;
         return [
@@ -105,21 +103,13 @@
     function openAIModal(indicador) {
       aiContext = indicador;
       document.getElementById('aiModal').classList.add('active');
-      document.getElementById('aiAnalysis').innerHTML = `<p>Analisando o indicador <strong>${indicador}</strong>...</p>`;
-      fetchGeminiAnalysis(indicador);
-    }
-
-    async function fetchGeminiAnalysis(indicador) {
-      // Simulação de IA, substitua por chamada real a API Gemini
-      const analysis = `Análise gerada pela IA para o indicador "${indicador}". Desempenho dentro do esperado. Plano de ação: manter as práticas atuais e revisar mensalmente.`;
-      document.getElementById('aiAnalysis').innerHTML = `<p>${analysis}</p>`;
+      document.getElementById('aiAnalysis').innerHTML = `<p>Análise simulada para o indicador <strong>${indicador}</strong>.</p>`;
     }
 
     function sendFollowUp() {
       const question = document.getElementById('aiFollowUp').value;
       if (!question.trim()) return;
-      // Simulação de resposta da IA
-      const followUpResponse = `<p><strong>Você:</strong> ${question}</p><p><strong>IA:</strong> Aprofundando a análise do indicador "${aiContext}", sugere-se observar variações sazonais e engajar o time nas metas do próximo trimestre.</p>`;
+      const followUpResponse = `<p><strong>Você:</strong> ${question}</p><p><strong>IA:</strong> Simulação de resposta. Continue monitorando o indicador <strong>${aiContext}</strong> com atenção.</p>`;
       document.getElementById('aiAnalysis').innerHTML += followUpResponse;
       document.getElementById('aiFollowUp').value = '';
     }
