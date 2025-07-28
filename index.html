@@ -1,118 +1,218 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Organograma Estratégico Interativo - Young</title>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" src="https://www.gstatic.com/charts/loader.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-    #chart_div {
-      width: 100%;
-      height: 90vh;
-    }
-    .tooltip {
-      font-size: 12px;
-    }
-    .modal {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #fff;
-      padding: 20px;
-      border: 1px solid #ccc;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      z-index: 1000;
-      display: none;
-    }
-    .modal.active {
-      display: block;
-    }
-    .modal textarea, .modal input {
-      width: 100%;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-  <h1 style="text-align: center">Organograma Estratégico Interativo - Young Empreendimentos</h1>
-  <div id="chart_div"></div>
-  <div id="aiModal" class="modal">
-    <div id="aiAnalysis"></div>
-    <textarea id="aiFollowUp" placeholder="Pergunte mais sobre este indicador..."></textarea>
-    <button onclick="sendFollowUp()">Enviar</button>
-  </div>
-  <script>
-    const SHEET_ID = '1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw';
-    const SHEET_NAME = 'Organograma';
-    const MONTH_YEAR = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toLowerCase();
-    const endpoint = `https://opensheet.elk.sh/${SHEET_ID}/${SHEET_NAME}`;
+// ObjetivosTree.tsx - componente de visualização de metas e resultados interativos com filtros
 
-    let chart;
-    let aiContext = '';
+import React, { useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { saveAs } from "file-saver";
 
-    google.charts.load('current', { packages: ['orgchart'] });
-    google.charts.setOnLoadCallback(drawChart);
+interface Indicador {
+  nome: string;
+  resultado: number;
+  meta: number;
+  time: string;
+  mes: string;
+  cor: string;
+}
 
-    async function drawChart() {
-      const response = await fetch(endpoint);
-      const data = await response.json();
+interface Objetivo {
+  nome: string;
+  indicadores: Indicador[];
+  time: string;
+  mes: string;
+}
 
-      const filtered = data.filter(row => (row['Mês'] || '').toLowerCase() === MONTH_YEAR);
+interface Empresa {
+  nome: string;
+  objetivos: Objetivo[];
+}
 
-      const treeData = new google.visualization.DataTable();
-      treeData.addColumn('string', 'Name');
-      treeData.addColumn('string', 'Manager');
-      treeData.addColumn('string', 'ToolTip');
+interface Props {
+  dados: Empresa[];
+}
 
-      treeData.addRows(filtered.map(row => {
-        let color = 'lightgray';
+export default function ObjetivosTree({ dados }: Props) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [mesSelecionado, setMesSelecionado] = useState<string>("");
+  const [timeSelecionado, setTimeSelecionado] = useState<string>("");
+  const [mostrarApenasNaoAtingidos, setMostrarApenasNaoAtingidos] = useState(false);
 
-        if (row['Resultado'] && row['Meta']) {
-          const resultado = parseFloat(row['Resultado'].replace(',', '.'));
-          const meta = parseFloat(row['Meta'].replace(',', '.'));
-          if (!isNaN(resultado) && !isNaN(meta)) {
-            color = resultado >= meta ? 'lightgreen' : '#f77';
-          }
+  const mesesDisponiveis = Array.from(
+    new Set(dados.flatMap(emp => emp.objetivos.map(obj => obj.mes)))
+  );
+
+  const timesDisponiveis = Array.from(
+    new Set(dados.flatMap(emp => emp.objetivos.map(obj => obj.time)))
+  );
+
+  const filtrarDados = () => {
+    return dados.map(empresa => ({
+      ...empresa,
+      objetivos: empresa.objetivos.filter(obj => {
+        const condMes = mesSelecionado ? obj.mes === mesSelecionado : true;
+        const condTime = timeSelecionado ? obj.time === timeSelecionado : true;
+        return condMes && condTime;
+      }).map(obj => ({
+        ...obj,
+        indicadores: obj.indicadores.filter(ind => {
+          if (!mostrarApenasNaoAtingidos) return true;
+          return ind.resultado < ind.meta;
+        })
+      })).filter(obj => obj.indicadores.length > 0)
+    })).filter(emp => emp.objetivos.length > 0);
+  };
+
+  useEffect(() => {
+    const dadosFiltrados = filtrarDados();
+    const root = d3.hierarchy({ nome: "Empresa", children: dadosFiltrados }, d => d.objetivos || d.children);
+
+    root.sum(() => 1);
+
+    const treeLayout = d3.tree<any>().nodeSize([100, 300]);
+    treeLayout(root);
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    const g = svg
+      .append("g")
+      .attr("transform", "translate(200, 50)");
+
+    const link = g
+      .selectAll(".link")
+      .data(root.links())
+      .enter()
+      .append("line")
+      .attr("class", "link")
+      .attr("x1", d => d.source.y)
+      .attr("y1", d => d.source.x)
+      .attr("x2", d => d.target.y)
+      .attr("y2", d => d.target.x)
+      .attr("stroke", "#ccc");
+
+    const node = g
+      .selectAll(".node")
+      .data(root.descendants())
+      .enter()
+      .append("g")
+      .attr("class", "node")
+      .attr("transform", d => `translate(${d.y},${d.x})`);
+
+    node
+      .append("circle")
+      .attr("r", 25)
+      .attr("fill", d => {
+        if (!d.data.indicadores) return "#e0e0e0";
+        const allOK = d.data.indicadores.every((i: Indicador) => i.resultado >= i.meta);
+        return allOK ? "#a7f3d0" : "#fecaca";
+      })
+      .attr("stroke", "#333")
+      .on("mouseover", function (event, d) {
+        const tooltip = d3.select("#tooltip");
+        if (d.data.indicadores) {
+          const html = d.data.indicadores
+            .map((i: Indicador) => `
+              <strong>${i.nome}</strong><br/>
+              Time: ${i.time}<br/>
+              Resultado: ${i.resultado}<br/>
+              Meta: ${i.meta}<br/><br/>
+            `)
+            .join("");
+          tooltip.html(html)
+            .style("left", event.pageX + 10 + "px")
+            .style("top", event.pageY + "px")
+            .style("opacity", 1);
         }
+      })
+      .on("mouseout", () => {
+        d3.select("#tooltip").style("opacity", 0);
+      });
 
-        const html = `
-          <div style='border:1px solid #ccc;padding:5px;background:${color};'>
-            <div>${row['Indicador'] || row['Objetivo'] || row['Empresa']}</div>
-            <div style='font-size: 11px;'>Nível: ${row['Nível'] || '---'}</div>
-            <div style='font-size: 11px;'>Resultado: ${row['Resultado'] || '-'} / Meta: ${row['Meta'] || '-'}</div>
-          </div>
-        `;
-        return [
-          { v: row['Indicador'] || row['Objetivo'] || row['Empresa'], f: html },
-          row['Superior'] || '',
-          `Time: ${row['Time'] || '-'}\nNível: ${row['Nível'] || '-'}`
-        ];
-      }));
+    node
+      .append("text")
+      .attr("dy", 4)
+      .attr("x", d => (d.children ? -30 : 30))
+      .style("text-anchor", d => (d.children ? "end" : "start"))
+      .text(d => d.data.nome);
+  }, [mesSelecionado, timeSelecionado, mostrarApenasNaoAtingidos]);
 
-      chart = new google.visualization.OrgChart(document.getElementById('chart_div'));
-      chart.draw(treeData, { allowHtml: true, nodeClass: 'node-style' });
-    }
+  const exportarImagem = async () => {
+    if (!wrapperRef.current) return;
+    const canvas = await html2canvas(wrapperRef.current);
+    canvas.toBlob(blob => {
+      if (blob) saveAs(blob, "objetivos.png");
+    });
+  };
 
-    function openAIModal(indicador) {
-      aiContext = indicador;
-      document.getElementById('aiModal').classList.add('active');
-      document.getElementById('aiAnalysis').innerHTML = `<p>Análise simulada para o indicador <strong>${indicador}</strong>.</p>`;
-    }
+  const exportarPDF = async () => {
+    if (!wrapperRef.current) return;
+    const canvas = await html2canvas(wrapperRef.current);
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF();
+    pdf.addImage(imgData, "PNG", 10, 10, 180, 0);
+    pdf.save("objetivos.pdf");
+  };
 
-    function sendFollowUp() {
-      const question = document.getElementById('aiFollowUp').value;
-      if (!question.trim()) return;
-      const followUpResponse = `<p><strong>Você:</strong> ${question}</p><p><strong>IA:</strong> Simulação de resposta. Continue monitorando o indicador <strong>${aiContext}</strong> com atenção.</p>`;
-      document.getElementById('aiAnalysis').innerHTML += followUpResponse;
-      document.getElementById('aiFollowUp').value = '';
-    }
-  </script>
-</body>
-</html>
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4">
+        <Select onValueChange={setMesSelecionado}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Selecione o mês" />
+          </SelectTrigger>
+          <SelectContent>
+            {mesesDisponiveis.map(m => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select onValueChange={setTimeSelecionado}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Selecione o time" />
+          </SelectTrigger>
+          <SelectContent>
+            {timesDisponiveis.map(t => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={mostrarApenasNaoAtingidos}
+            onChange={e => setMostrarApenasNaoAtingidos(e.target.checked)}
+          />
+          Mostrar apenas não atingidos
+        </label>
+
+        <Button onClick={exportarImagem}>Exportar PNG</Button>
+        <Button onClick={exportarPDF}>Exportar PDF</Button>
+      </div>
+
+      <div ref={wrapperRef} className="relative overflow-auto rounded-xl border p-4 shadow-md">
+        <svg ref={svgRef} width={1200} height={800} />
+        <div
+          id="tooltip"
+          className="absolute z-10 max-w-xs rounded bg-white p-2 text-sm shadow-md"
+          style={{ opacity: 0, pointerEvents: "none", position: "absolute" }}
+        ></div>
+      </div>
+    </div>
+  );
+}
