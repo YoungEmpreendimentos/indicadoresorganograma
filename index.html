@@ -1,218 +1,176 @@
-// ObjetivosTree.tsx - componente de visualização de metas e resultados interativos com filtros
-
 import React, { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { saveAs } from "file-saver";
-
-interface Indicador {
-  nome: string;
-  resultado: number;
-  meta: number;
-  time: string;
-  mes: string;
-  cor: string;
-}
+import html2canvas from "html2canvas";
+import saveSvgAsPng from "save-svg-as-png";
 
 interface Objetivo {
-  nome: string;
-  indicadores: Indicador[];
-  time: string;
-  mes: string;
+  Empresa: string;
+  Objetivo: string;
+  Indicador: string;
+  Meta: number;
+  Resultado: number;
+  Time: string;
+  Data: string;
 }
 
-interface Empresa {
-  nome: string;
-  objetivos: Objetivo[];
+interface Node extends d3.HierarchyPointNode<any> {
+  data: any;
+  children?: Node[];
 }
 
-interface Props {
-  dados: Empresa[];
-}
-
-export default function ObjetivosTree({ dados }: Props) {
+export default function ObjetivosTree({ data }: { data: Objetivo[] }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [mesSelecionado, setMesSelecionado] = useState<string>("");
-  const [timeSelecionado, setTimeSelecionado] = useState<string>("");
-  const [mostrarApenasNaoAtingidos, setMostrarApenasNaoAtingidos] = useState(false);
 
-  const mesesDisponiveis = Array.from(
-    new Set(dados.flatMap(emp => emp.objetivos.map(obj => obj.mes)))
+  const [selectedMonth, setSelectedMonth] = useState<string>("Todos");
+  const [selectedTeam, setSelectedTeam] = useState<string>("Todos");
+  const [onlyNotMet, setOnlyNotMet] = useState<boolean>(false);
+
+  const months = Array.from(
+    new Set(
+      data.map((d) => {
+        const date = new Date(d.Data);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      })
+    )
   );
 
-  const timesDisponiveis = Array.from(
-    new Set(dados.flatMap(emp => emp.objetivos.map(obj => obj.time)))
-  );
+  const teams = Array.from(new Set(data.map((d) => d.Time)));
 
-  const filtrarDados = () => {
-    return dados.map(empresa => ({
-      ...empresa,
-      objetivos: empresa.objetivos.filter(obj => {
-        const condMes = mesSelecionado ? obj.mes === mesSelecionado : true;
-        const condTime = timeSelecionado ? obj.time === timeSelecionado : true;
-        return condMes && condTime;
-      }).map(obj => ({
-        ...obj,
-        indicadores: obj.indicadores.filter(ind => {
-          if (!mostrarApenasNaoAtingidos) return true;
-          return ind.resultado < ind.meta;
-        })
-      })).filter(obj => obj.indicadores.length > 0)
-    })).filter(emp => emp.objetivos.length > 0);
-  };
+  const filteredData = data.filter((d) => {
+    const date = new Date(d.Data);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const byMonth = selectedMonth === "Todos" || dateKey === selectedMonth;
+    const byTeam = selectedTeam === "Todos" || d.Time === selectedTeam;
+    const byResult = !onlyNotMet || d.Resultado < d.Meta;
+    return byMonth && byTeam && byResult;
+  });
 
   useEffect(() => {
-    const dadosFiltrados = filtrarDados();
-    const root = d3.hierarchy({ nome: "Empresa", children: dadosFiltrados }, d => d.objetivos || d.children);
-
-    root.sum(() => 1);
-
-    const treeLayout = d3.tree<any>().nodeSize([100, 300]);
-    treeLayout(root);
+    if (!svgRef.current || !filteredData.length) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
+    const width = wrapperRef.current?.clientWidth || 1000;
+    const dx = 120;
+    const dy = 280;
+    const margin = { top: 60, right: 80, bottom: 60, left: 80 };
+    const height = 800;
+
+    const root = d3.stratify<Objetivo>()
+      .id((d) => `${d.Empresa}/${d.Objetivo}/${d.Indicador}`)
+      .parentId((d) => {
+        if (d.Indicador) return `${d.Empresa}/${d.Objetivo}`;
+        if (d.Objetivo) return `${d.Empresa}`;
+        return "";
+      })(filteredData);
+
+    const treeLayout = d3.tree().nodeSize([dx, dy]);
+    const hierarchy = d3.hierarchy(root as any);
+    const tree = treeLayout(hierarchy);
+
     const g = svg
+      .attr("viewBox", [-margin.left, -margin.top, width, height])
       .append("g")
-      .attr("transform", "translate(200, 50)");
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
     const link = g
-      .selectAll(".link")
-      .data(root.links())
-      .enter()
-      .append("line")
-      .attr("class", "link")
-      .attr("x1", d => d.source.y)
-      .attr("y1", d => d.source.x)
-      .attr("x2", d => d.target.y)
-      .attr("y2", d => d.target.x)
-      .attr("stroke", "#ccc");
+      .append("g")
+      .attr("fill", "none")
+      .attr("stroke", "#ccc")
+      .attr("stroke-width", 2)
+      .selectAll("path")
+      .data(tree.links())
+      .join("path")
+      .attr("d", d3.linkHorizontal()
+        .x((d) => d.y as number)
+        .y((d) => d.x as number)
+      );
 
     const node = g
-      .selectAll(".node")
-      .data(root.descendants())
-      .enter()
       .append("g")
-      .attr("class", "node")
-      .attr("transform", d => `translate(${d.y},${d.x})`);
+      .selectAll("g")
+      .data(tree.descendants())
+      .join("g")
+      .attr("transform", (d) => `translate(${d.y},${d.x})`);
 
-    node
-      .append("circle")
-      .attr("r", 25)
-      .attr("fill", d => {
-        if (!d.data.indicadores) return "#e0e0e0";
-        const allOK = d.data.indicadores.every((i: Indicador) => i.resultado >= i.meta);
-        return allOK ? "#a7f3d0" : "#fecaca";
+    node.append("rect")
+      .attr("x", -80)
+      .attr("y", -20)
+      .attr("width", 160)
+      .attr("height", 40)
+      .attr("rx", 8)
+      .attr("fill", (d) => {
+        if (!d.data.data.Indicador) return "#f3f4f6";
+        return d.data.data.Resultado < d.data.data.Meta ? "#fecaca" : "#bbf7d0";
       })
-      .attr("stroke", "#333")
-      .on("mouseover", function (event, d) {
-        const tooltip = d3.select("#tooltip");
-        if (d.data.indicadores) {
-          const html = d.data.indicadores
-            .map((i: Indicador) => `
-              <strong>${i.nome}</strong><br/>
-              Time: ${i.time}<br/>
-              Resultado: ${i.resultado}<br/>
-              Meta: ${i.meta}<br/><br/>
-            `)
-            .join("");
-          tooltip.html(html)
-            .style("left", event.pageX + 10 + "px")
-            .style("top", event.pageY + "px")
-            .style("opacity", 1);
+      .attr("stroke", "#000");
+
+    node.append("text")
+      .attr("dy", "0.35em")
+      .attr("text-anchor", "middle")
+      .text((d) => {
+        if (d.data.data.Indicador) {
+          return `${d.data.data.Indicador}: ${d.data.data.Resultado}/${d.data.data.Meta}`;
+        } else if (d.data.data.Objetivo) {
+          return d.data.data.Objetivo;
+        } else {
+          return d.data.data.Empresa;
         }
       })
-      .on("mouseout", () => {
-        d3.select("#tooltip").style("opacity", 0);
-      });
+      .style("font-size", "12px");
+  }, [filteredData]);
 
-    node
-      .append("text")
-      .attr("dy", 4)
-      .attr("x", d => (d.children ? -30 : 30))
-      .style("text-anchor", d => (d.children ? "end" : "start"))
-      .text(d => d.data.nome);
-  }, [mesSelecionado, timeSelecionado, mostrarApenasNaoAtingidos]);
-
-  const exportarImagem = async () => {
+  const exportAsPng = () => {
     if (!wrapperRef.current) return;
-    const canvas = await html2canvas(wrapperRef.current);
-    canvas.toBlob(blob => {
-      if (blob) saveAs(blob, "objetivos.png");
+    html2canvas(wrapperRef.current).then((canvas) => {
+      const link = document.createElement("a");
+      link.download = "objetivos-tree.png";
+      link.href = canvas.toDataURL();
+      link.click();
     });
   };
 
-  const exportarPDF = async () => {
-    if (!wrapperRef.current) return;
-    const canvas = await html2canvas(wrapperRef.current);
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF();
-    pdf.addImage(imgData, "PNG", 10, 10, 180, 0);
-    pdf.save("objetivos.pdf");
+  const exportAsSvg = () => {
+    if (!svgRef.current) return;
+    saveSvgAsPng.saveSvgAsPng(svgRef.current, "objetivos-tree.svg");
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-4">
-        <Select onValueChange={setMesSelecionado}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Selecione o mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {mesesDisponiveis.map(m => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex gap-2">
+        <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="border p-1 rounded">
+          <option value="Todos">Todos os Meses</option>
+          {months.map((month) => (
+            <option key={month} value={month}>{month}</option>
+          ))}
+        </select>
 
-        <Select onValueChange={setTimeSelecionado}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Selecione o time" />
-          </SelectTrigger>
-          <SelectContent>
-            {timesDisponiveis.map(t => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)} className="border p-1 rounded">
+          <option value="Todos">Todos os Times</option>
+          {teams.map((team) => (
+            <option key={team} value={team}>{team}</option>
+          ))}
+        </select>
 
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={mostrarApenasNaoAtingidos}
-            onChange={e => setMostrarApenasNaoAtingidos(e.target.checked)}
-          />
-          Mostrar apenas não atingidos
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={onlyNotMet} onChange={(e) => setOnlyNotMet(e.target.checked)} /> Somente não atingidos
         </label>
 
-        <Button onClick={exportarImagem}>Exportar PNG</Button>
-        <Button onClick={exportarPDF}>Exportar PDF</Button>
+        <Button onClick={exportAsPng}>Exportar PNG</Button>
+        <Button onClick={exportAsSvg}>Exportar SVG</Button>
       </div>
 
-      <div ref={wrapperRef} className="relative overflow-auto rounded-xl border p-4 shadow-md">
-        <svg ref={svgRef} width={1200} height={800} />
-        <div
-          id="tooltip"
-          className="absolute z-10 max-w-xs rounded bg-white p-2 text-sm shadow-md"
-          style={{ opacity: 0, pointerEvents: "none", position: "absolute" }}
-        ></div>
-      </div>
+      <Card>
+        <div ref={wrapperRef} className="overflow-auto">
+          <svg ref={svgRef} width="1000" height="800" />
+        </div>
+      </Card>
+
+      <div id="tooltip" style={{ position: "absolute", background: "white", padding: "8px", border: "1px solid #ccc", borderRadius: "4px", opacity: 0, pointerEvents: "none" }}></div>
     </div>
   );
 }
