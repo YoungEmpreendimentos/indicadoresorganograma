@@ -24,14 +24,29 @@
             font-weight: 700;
         }
 
+        #controls-container {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        #month-selector {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
+
         #chart-container {
             width: 100%;
             overflow-x: auto;
             padding: 20px 0;
-            text-align: center; /* Centraliza o organograma */
+            text-align: center;
         }
         
-        /* Estrutura do Organograma */
         .org-chart {
             display: inline-flex;
             flex-direction: column;
@@ -54,7 +69,7 @@
             width: 250px;
             min-height: 110px;
             text-align: center;
-            margin-bottom: 50px; /* Espaço para a linha descendente */
+            margin-bottom: 50px;
             cursor: pointer;
             position: relative;
             z-index: 2;
@@ -95,30 +110,25 @@
             display: flex;
             justify-content: center;
             position: relative;
-            padding-top: 50px; /* Espaço para a linha ascendente e horizontal */
+            padding-top: 50px;
         }
 
-        /* --- LÓGICA DE LINHAS AJUSTADA PARA CONEXÃO DIRETA --- */
-
-        /* Linha vertical que desce de um nó pai. */
         .node-content::after {
             content: '';
             position: absolute;
             left: 50%;
-            bottom: -50px; /* Projeta a linha para baixo, no espaço da margem */
+            bottom: -50px;
             width: 2px;
             height: 50px;
             background-color: #BDBDBD;
             transform: translateX(-50%);
         }
 
-        /* Esconde a linha descendente para nós sem filhos (folhas) ou nós recolhidos. */
         .org-node.leaf > .node-content::after,
         .org-node.collapsed > .node-content::after {
             display: none;
         }
 
-        /* Linha horizontal que conecta um grupo de filhos. */
         .children-container::before {
             content: '';
             position: absolute;
@@ -130,44 +140,40 @@
             z-index: 1;
         }
 
-        /* Linha vertical que sobe de um nó filho ATÉ o conector horizontal. */
         .children-container > .org-node > .node-content::before {
             content: '';
             position: absolute;
             left: 50%;
-            bottom: 100%; /* Começa exatamente no topo do quadro do filho */
+            bottom: 100%;
             width: 2px;
-            height: 50px; /* Sobe 50px para encontrar a linha horizontal no padding */
+            height: 50px;
             background-color: #BDBDBD;
             transform: translateX(-50%);
             z-index: 1;
         }
 
-        /* "Apagador" para o início da linha horizontal (antes do primeiro filho) */
         .children-container > .org-node:first-child::after {
             content: '';
             position: absolute;
-            top: -50px; /* Sobe 50px para alinhar com a linha horizontal */
+            top: -50px;
             left: 0;
             width: 50%;
             height: 2px;
-            background-color: #f4f7f6; /* Usa a cor de fundo para "apagar" a linha */
-            z-index: 2; /* Garante que o apagador fique sobre a linha */
+            background-color: #f4f7f6;
+            z-index: 2;
         }
 
-        /* "Apagador" para o fim da linha horizontal (depois do último filho) */
         .children-container > .org-node:last-child::after {
             content: '';
             position: absolute;
-            top: -50px; /* Sobe 50px para alinhar com a linha horizontal */
+            top: -50px;
             right: 0;
             width: 50%;
             height: 2px;
-            background-color: #f4f7f6; /* Usa a cor de fundo para "apagar" a linha */
-            z-index: 2; /* Garante que o apagador fique sobre a linha */
+            background-color: #f4f7f6;
+            z-index: 2;
         }
 
-        /* Se houver apenas um filho, não precisa de apagadores */
         .children-container > .org-node:first-child:last-child::after {
             display: none;
         }
@@ -184,48 +190,94 @@
         <p id="info-mes" class="text-gray-500 mt-2" style="font-family: 'Be Vietnam Pro', sans-serif;"></p>
     </header>
 
+    <div id="controls-container" style="display: none;">
+        <label for="month-selector" class="mr-2 font-semibold text-gray-700">Visualizar Mês:</label>
+        <select id="month-selector"></select>
+    </div>
+
     <main id="org-chart-container" class="w-full">
         <p id="loading-message" class="text-center">Carregando dados da planilha...</p>
     </main>
 
     <script>
-        // URL do CSV publicado da sua planilha Google
         const csvUrl = 'https://docs.google.com/spreadsheets/d/1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw/export?format=csv&gid=143720029';
+        let allData = []; // Armazena todos os dados da planilha
 
         document.addEventListener('DOMContentLoaded', () => {
             fetch(csvUrl)
                 .then(response => {
-                    if (!response.ok) throw new Error('Erro ao carregar a planilha. Verifique se o link está correto e a planilha está publicada para a web.');
+                    if (!response.ok) throw new Error('Erro ao carregar a planilha.');
                     return response.text();
                 })
                 .then(csvText => {
-                    const data = parseCSV(csvText);
-                    const currentMonthData = filterDataForCurrentMonth(data);
-                    
-                    if (currentMonthData.length === 0) {
-                        document.getElementById('loading-message').innerText = 'Nenhum dado encontrado para o mês atual na planilha.';
-                        return;
+                    allData = parseCSV(csvText);
+                    if (allData.length === 0) {
+                         document.getElementById('loading-message').innerText = 'Nenhum dado encontrado na planilha.';
+                         return;
                     }
                     
-                    document.getElementById('loading-message').style.display = 'none';
-                    const currentMonthName = new Date().toLocaleString('pt-BR', { month: 'long' });
-                    const currentYear = new Date().getFullYear();
-                    document.getElementById('info-mes').innerText = `Exibindo dados de: ${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)}/${currentYear}`;
+                    setupControls(allData);
+                    
+                    const currentMonthIdentifier = getCurrentMonthIdentifier();
+                    renderChartForMonth(currentMonthIdentifier);
 
-                    const hierarchy = buildHierarchy(currentMonthData);
-                    const chartContainer = document.getElementById('org-chart-container');
-                    chartContainer.innerHTML = ''; // Limpa a mensagem de carregamento
-                    chartContainer.appendChild(createOrgChart(hierarchy));
+                    document.getElementById('loading-message').style.display = 'none';
+                    document.getElementById('controls-container').style.display = 'block';
                 })
                 .catch(error => {
                     console.error('Erro:', error);
                     document.getElementById('loading-message').innerText = `Falha ao carregar: ${error.message}`;
                 });
         });
+        
+        function setupControls(data) {
+            const monthSelector = document.getElementById('month-selector');
+            const uniqueMonths = [...new Set(data.map(item => item['Mês']).filter(Boolean))];
+            
+            uniqueMonths.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                monthSelector.appendChild(option);
+            });
+
+            const currentMonthIdentifier = getCurrentMonthIdentifier();
+            if (uniqueMonths.includes(currentMonthIdentifier)) {
+                monthSelector.value = currentMonthIdentifier;
+            }
+
+            monthSelector.addEventListener('change', (e) => {
+                renderChartForMonth(e.target.value);
+            });
+        }
+
+        function renderChartForMonth(monthIdentifier) {
+            const monthData = allData.filter(item => item['Mês'] === monthIdentifier);
+            const chartContainer = document.getElementById('org-chart-container');
+            chartContainer.innerHTML = ''; // Limpa o organograma anterior
+
+            if (monthData.length === 0) {
+                chartContainer.innerHTML = `<p class="text-center text-gray-500">Nenhum dado encontrado para ${monthIdentifier}.</p>`;
+                return;
+            }
+
+            const hierarchy = buildHierarchy(monthData);
+            chartContainer.appendChild(createOrgChart(hierarchy));
+
+            const [mes, ano] = monthIdentifier.split('/');
+            document.getElementById('info-mes').innerText = `Exibindo dados de: ${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
+        }
+
+        function getCurrentMonthIdentifier() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const monthName = now.toLocaleString('pt-BR', { month: 'long' });
+            return `${monthName}/${year}`;
+        }
 
         function parseCSV(text) {
             const lines = text.replace(/\r/g, '').split('\n');
-            if (lines.length === 0) return [];
+            if (lines.length < 2) return [];
             const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
             const result = [];
             for (let i = 1; i < lines.length; i++) {
@@ -238,28 +290,6 @@
                 result.push(obj);
             }
             return result;
-        }
-
-        function filterDataForCurrentMonth(data) {
-            const now = new Date();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
-            const monthMap = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
-
-            return data.filter(item => {
-                const monthField = item['Mês'];
-                if (!monthField) return false;
-                const parts = monthField.split('/');
-                if (parts.length < 2) return false;
-                
-                const mesStr = parts[0].toLowerCase().trim();
-                const anoStr = parts[1].trim();
-                
-                const itemMonth = monthMap[mesStr];
-                const itemYear = parseInt(anoStr, 10);
-                
-                return itemMonth === currentMonth && itemYear === currentYear;
-            });
         }
 
         function buildHierarchy(data) {
@@ -328,14 +358,14 @@
                     let success = false;
                     if (metrica === 'reduzir' || metrica === 'manter') {
                         success = resultadoNum <= metaNum;
-                    } else { // Padrão é "aumentar"
+                    } else {
                         success = resultadoNum >= metaNum;
                     }
 
                     if (success) {
-                        nodeContent.style.backgroundColor = '#27ae60'; // Verde
+                        nodeContent.style.backgroundColor = '#27ae60';
                     } else {
-                        nodeContent.style.backgroundColor = '#c0392b'; // Vermelho
+                        nodeContent.style.backgroundColor = '#c0392b';
                     }
                 }
             } else if (node.data['Nível'] === 'Objetivo Estratégico') {
