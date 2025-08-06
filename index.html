@@ -18,6 +18,7 @@
             flex-direction: column;
             align-items: center;
             padding: 20px;
+            padding-bottom: 100px; /* Espaço extra no final para não sobrepor o zoom */
         }
 
         h1 {
@@ -25,7 +26,7 @@
             font-weight: 700;
         }
 
-        /* Contêiner para os controles, como o seletor de mês e zoom */
+        /* Contêiner para os controles, como o seletor de mês */
         #controls-container {
             background-color: #ffffff;
             padding: 15px;
@@ -44,25 +45,35 @@
             background-color: #fff;
         }
 
-        /* **NOVO**: Estilos para os controles de zoom */
+        /* **AJUSTADO**: Estilos para os controles de zoom flutuantes */
         #zoom-controls {
-            margin-left: 1.5rem;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
             display: flex;
             align-items: center;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            padding: 5px;
         }
         #zoom-controls button {
-            width: 36px;
-            height: 36px;
-            background-color: #e2e8f0;
-            font-size: 1.25rem;
+            width: 40px;
+            height: 40px;
+            background-color: #f1f5f9;
+            font-size: 1.5rem;
             font-weight: bold;
-            color: #4a5568;
+            color: #334155;
             border: none;
             cursor: pointer;
             transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         #zoom-controls button:hover {
-            background-color: #cbd5e0;
+            background-color: #e2e8f0;
         }
         #zoom-out { border-radius: 6px 0 0 6px; }
         #zoom-in { border-radius: 0 6px 6px 0; }
@@ -71,11 +82,13 @@
             font-size: 1rem;
             font-weight: 600;
             background-color: #fff;
-            border-top: 1px solid #ccc;
-            border-bottom: 1px solid #ccc;
-            height: 36px;
+            border-top: 1px solid #cbd5e0;
+            border-bottom: 1px solid #cbd5e0;
+            height: 40px;
             display: flex;
             align-items: center;
+            min-width: 60px;
+            justify-content: center;
         }
 
 
@@ -85,7 +98,6 @@
             overflow-x: auto;
             padding: 20px 0;
             text-align: center;
-            /* **NOVO**: Transição e origem para o zoom */
             transform-origin: top center;
             transition: transform 0.2s ease-out;
         }
@@ -241,22 +253,23 @@
             <label for="month-selector" class="mr-2 font-semibold text-gray-700">Visualizar Mês:</label>
             <select id="month-selector"></select>
         </div>
-        <!-- **NOVO**: Controles de zoom -->
-        <div id="zoom-controls">
-            <button id="zoom-out" title="Minimizar">-</button>
-            <span id="zoom-level">100%</span>
-            <button id="zoom-in" title="Maximizar">+</button>
-        </div>
     </div>
 
     <main id="org-chart-container" class="w-full">
         <p id="loading-message" class="text-center">Carregando dados da planilha...</p>
     </main>
 
+    <!-- **AJUSTADO**: Controles de zoom movidos para fora do fluxo principal para se tornarem flutuantes -->
+    <div id="zoom-controls">
+        <button id="zoom-out" title="Minimizar">-</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in" title="Maximizar">+</button>
+    </div>
+
     <script>
         const csvUrl = 'https://docs.google.com/spreadsheets/d/1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw/export?format=csv&gid=143720029';
         let allData = [];
-        let currentZoom = 1.0; // **NOVO**: Variável para controlar o nível de zoom
+        let currentZoom = 1.0; 
 
         document.addEventListener('DOMContentLoaded', () => {
             fetch(csvUrl)
@@ -274,7 +287,6 @@
                     setupControls(allData);
                     setupZoom();
                     
-                    // **AJUSTADO**: Tenta carregar 'julho/2025' por padrão
                     const defaultMonth = 'julho/2025';
                     const uniqueMonths = [...new Set(allData.map(item => item['Mês']).filter(Boolean))];
 
@@ -282,7 +294,6 @@
                         document.getElementById('month-selector').value = defaultMonth;
                         renderChartForMonth(defaultMonth);
                     } else {
-                        // Se não encontrar, carrega o mês mais recente como alternativa
                         const latestMonth = getLatestAvailableMonth(allData);
                         if (latestMonth) {
                             document.getElementById('month-selector').value = latestMonth;
@@ -305,7 +316,6 @@
             const monthSelector = document.getElementById('month-selector');
             const uniqueMonths = [...new Set(data.map(item => item['Mês']).filter(Boolean))];
             
-            // Limpa opções antigas antes de adicionar novas
             monthSelector.innerHTML = '';
             uniqueMonths.forEach(month => {
                 const option = document.createElement('option');
@@ -319,7 +329,6 @@
             });
         }
 
-        // **NOVO**: Função para configurar os botões de zoom
         function setupZoom() {
             const zoomInBtn = document.getElementById('zoom-in');
             const zoomOutBtn = document.getElementById('zoom-out');
@@ -335,7 +344,6 @@
             });
         }
 
-        // **NOVO**: Função para aplicar o zoom ao contêiner do gráfico
         function applyZoom() {
             const chartContainer = document.getElementById('org-chart-container');
             const zoomLevelSpan = document.getElementById('zoom-level');
