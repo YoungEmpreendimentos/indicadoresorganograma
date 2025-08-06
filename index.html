@@ -25,13 +25,15 @@
             font-weight: 700;
         }
 
-        /* Contêiner para os controles, como o seletor de mês */
+        /* Contêiner para os controles, como o seletor de mês e zoom */
         #controls-container {
             background-color: #ffffff;
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
         }
 
         #month-selector {
@@ -42,12 +44,50 @@
             background-color: #fff;
         }
 
+        /* **NOVO**: Estilos para os controles de zoom */
+        #zoom-controls {
+            margin-left: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+        #zoom-controls button {
+            width: 36px;
+            height: 36px;
+            background-color: #e2e8f0;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #4a5568;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #zoom-controls button:hover {
+            background-color: #cbd5e0;
+        }
+        #zoom-out { border-radius: 6px 0 0 6px; }
+        #zoom-in { border-radius: 0 6px 6px 0; }
+        #zoom-level {
+            padding: 0 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            background-color: #fff;
+            border-top: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+            height: 36px;
+            display: flex;
+            align-items: center;
+        }
+
+
         /* Contêiner principal do organograma, permite rolagem horizontal */
         #chart-container {
             width: 100%;
             overflow-x: auto;
             padding: 20px 0;
             text-align: center;
+            /* **NOVO**: Transição e origem para o zoom */
+            transform-origin: top center;
+            transition: transform 0.2s ease-out;
         }
         
         /* Estrutura base do organograma */
@@ -111,7 +151,6 @@
             color: #f2f2f2;
         }
 
-        /* Contêiner para os nós filhos */
         .children-container {
             display: flex;
             justify-content: center;
@@ -119,7 +158,7 @@
             padding-top: 50px;
         }
 
-        /* --- Início: CSS para desenhar as linhas de conexão --- */
+        /* --- Linhas de conexão --- */
         .node-content::after {
             content: '';
             position: absolute;
@@ -184,7 +223,6 @@
         .children-container > .org-node:first-child:last-child::after {
             display: none;
         }
-        /* --- Fim: CSS para desenhar as linhas de conexão --- */
 
         .collapsed > .children-container {
             display: none;
@@ -199,8 +237,16 @@
     </header>
 
     <div id="controls-container" style="display: none;">
-        <label for="month-selector" class="mr-2 font-semibold text-gray-700">Visualizar Mês:</label>
-        <select id="month-selector"></select>
+        <div>
+            <label for="month-selector" class="mr-2 font-semibold text-gray-700">Visualizar Mês:</label>
+            <select id="month-selector"></select>
+        </div>
+        <!-- **NOVO**: Controles de zoom -->
+        <div id="zoom-controls">
+            <button id="zoom-out" title="Minimizar">-</button>
+            <span id="zoom-level">100%</span>
+            <button id="zoom-in" title="Maximizar">+</button>
+        </div>
     </div>
 
     <main id="org-chart-container" class="w-full">
@@ -210,6 +256,7 @@
     <script>
         const csvUrl = 'https://docs.google.com/spreadsheets/d/1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw/export?format=csv&gid=143720029';
         let allData = [];
+        let currentZoom = 1.0; // **NOVO**: Variável para controlar o nível de zoom
 
         document.addEventListener('DOMContentLoaded', () => {
             fetch(csvUrl)
@@ -225,18 +272,28 @@
                     }
                     
                     setupControls(allData);
+                    setupZoom();
                     
-                    // **AJUSTADO**: Carrega o último mês disponível na planilha por padrão
-                    const latestMonth = getLatestAvailableMonth(allData);
-                    if (latestMonth) {
-                        document.getElementById('month-selector').value = latestMonth;
-                        renderChartForMonth(latestMonth);
+                    // **AJUSTADO**: Tenta carregar 'julho/2025' por padrão
+                    const defaultMonth = 'julho/2025';
+                    const uniqueMonths = [...new Set(allData.map(item => item['Mês']).filter(Boolean))];
+
+                    if (uniqueMonths.includes(defaultMonth)) {
+                        document.getElementById('month-selector').value = defaultMonth;
+                        renderChartForMonth(defaultMonth);
                     } else {
-                        document.getElementById('loading-message').innerText = 'Nenhum mês válido encontrado nos dados.';
+                        // Se não encontrar, carrega o mês mais recente como alternativa
+                        const latestMonth = getLatestAvailableMonth(allData);
+                        if (latestMonth) {
+                            document.getElementById('month-selector').value = latestMonth;
+                            renderChartForMonth(latestMonth);
+                        } else {
+                            document.getElementById('loading-message').innerText = 'Nenhum mês válido encontrado nos dados.';
+                        }
                     }
 
                     document.getElementById('loading-message').style.display = 'none';
-                    document.getElementById('controls-container').style.display = 'block';
+                    document.getElementById('controls-container').style.display = 'flex';
                 })
                 .catch(error => {
                     console.error('Erro:', error);
@@ -248,6 +305,8 @@
             const monthSelector = document.getElementById('month-selector');
             const uniqueMonths = [...new Set(data.map(item => item['Mês']).filter(Boolean))];
             
+            // Limpa opções antigas antes de adicionar novas
+            monthSelector.innerHTML = '';
             uniqueMonths.forEach(month => {
                 const option = document.createElement('option');
                 option.value = month;
@@ -259,6 +318,31 @@
                 renderChartForMonth(e.target.value);
             });
         }
+
+        // **NOVO**: Função para configurar os botões de zoom
+        function setupZoom() {
+            const zoomInBtn = document.getElementById('zoom-in');
+            const zoomOutBtn = document.getElementById('zoom-out');
+
+            zoomInBtn.addEventListener('click', () => {
+                currentZoom = Math.min(2.0, currentZoom + 0.1); // Limite máximo de 200%
+                applyZoom();
+            });
+
+            zoomOutBtn.addEventListener('click', () => {
+                currentZoom = Math.max(0.3, currentZoom - 0.1); // Limite mínimo de 30%
+                applyZoom();
+            });
+        }
+
+        // **NOVO**: Função para aplicar o zoom ao contêiner do gráfico
+        function applyZoom() {
+            const chartContainer = document.getElementById('org-chart-container');
+            const zoomLevelSpan = document.getElementById('zoom-level');
+            chartContainer.style.transform = `scale(${currentZoom})`;
+            zoomLevelSpan.textContent = `${Math.round(currentZoom * 100)}%`;
+        }
+
 
         function renderChartForMonth(monthIdentifier) {
             const monthData = allData.filter(item => item['Mês'] === monthIdentifier);
@@ -278,9 +362,6 @@
             document.getElementById('info-mes').innerText = `Exibindo dados de: ${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
         }
 
-        /**
-         * **NOVO**: Encontra o mês mais recente com dados na planilha.
-         */
         function getLatestAvailableMonth(data) {
             const monthMap = {
                 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
@@ -328,15 +409,11 @@
             return result;
         }
 
-        /**
-         * **REESCRITO**: Constrói uma hierarquia dinâmica com múltiplos níveis.
-         */
         function buildHierarchy(data) {
             const root = { id: 'Young Empreendimentos', data: { 'Nível': 'Empresa' }, children: [] };
             const nodeMap = new Map();
             const dataMap = new Map();
 
-            // 1. Criar um nó para cada item único (Principal ou Subordinado)
             data.forEach(item => {
                 if (item['Principal'] && !nodeMap.has(item['Principal'])) {
                     nodeMap.set(item['Principal'], { id: item['Principal'], children: [] });
@@ -345,12 +422,10 @@
                     if (!nodeMap.has(item['Subordinados'])) {
                         nodeMap.set(item['Subordinados'], { id: item['Subordinados'], children: [] });
                     }
-                    // A "verdadeira" fonte de dados para um nó é a linha onde ele é um subordinado
                     dataMap.set(item['Subordinados'], item);
                 }
             });
 
-            // 2. Conectar pais e filhos e identificar os nós raiz da hierarquia
             const childNodes = new Set();
             data.forEach(item => {
                 const parentId = item['Principal'];
@@ -366,10 +441,8 @@
                 }
             });
 
-            // 3. Atribuir os dados a cada nó
             nodeMap.forEach((node, id) => {
                 node.data = dataMap.get(id) || { 'Nível': 'Objetivo Estratégico' };
-                // Se um nó só aparece como Principal, pegamos os dados da primeira linha onde ele aparece
                 if (!dataMap.has(id)) {
                     const principalRow = data.find(d => d['Principal'] === id);
                     if (principalRow) {
@@ -379,10 +452,8 @@
                 }
             });
 
-            // 4. Agrupar os nós raiz por Perspectiva
             const perspectiveMap = new Map();
             nodeMap.forEach((node, id) => {
-                // Um nó é raiz se não for filho de ninguém
                 if (!childNodes.has(id)) {
                     const perspective = node.data['Perspectiva'] || 'Geral';
                     if (!perspectiveMap.has(perspective)) {
