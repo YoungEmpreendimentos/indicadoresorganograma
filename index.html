@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <style>
+        /* Estilos gerais do corpo da página */
         body {
             font-family: 'Space Grotesk', sans-serif;
             background-color: #f4f7f6;
@@ -24,6 +25,7 @@
             font-weight: 700;
         }
 
+        /* Contêiner para os controles, como o seletor de mês */
         #controls-container {
             background-color: #ffffff;
             padding: 15px;
@@ -40,6 +42,7 @@
             background-color: #fff;
         }
 
+        /* Contêiner principal do organograma, permite rolagem horizontal */
         #chart-container {
             width: 100%;
             overflow-x: auto;
@@ -47,6 +50,7 @@
             text-align: center;
         }
         
+        /* Estrutura base do organograma */
         .org-chart {
             display: inline-flex;
             flex-direction: column;
@@ -61,8 +65,9 @@
             padding: 0 10px;
         }
 
+        /* Estilo dos "cards" do organograma */
         .node-content {
-            background-color: #2c3e50;
+            background-color: #2c3e50; /* Cor padrão */
             border: 1px solid #BDBDBD;
             border-radius: 8px;
             padding: 15px;
@@ -106,6 +111,7 @@
             color: #f2f2f2;
         }
 
+        /* Contêiner para os nós filhos */
         .children-container {
             display: flex;
             justify-content: center;
@@ -113,6 +119,7 @@
             padding-top: 50px;
         }
 
+        /* --- Início: CSS para desenhar as linhas de conexão --- */
         .node-content::after {
             content: '';
             position: absolute;
@@ -177,6 +184,7 @@
         .children-container > .org-node:first-child:last-child::after {
             display: none;
         }
+        /* --- Fim: CSS para desenhar as linhas de conexão --- */
 
         .collapsed > .children-container {
             display: none;
@@ -201,7 +209,7 @@
 
     <script>
         const csvUrl = 'https://docs.google.com/spreadsheets/d/1H-9oU9Q1HxO2iASPY24hvxK2ZWZBOHFMLuu8KLPRKCw/export?format=csv&gid=143720029';
-        let allData = []; // Armazena todos os dados da planilha
+        let allData = [];
 
         document.addEventListener('DOMContentLoaded', () => {
             fetch(csvUrl)
@@ -212,14 +220,20 @@
                 .then(csvText => {
                     allData = parseCSV(csvText);
                     if (allData.length === 0) {
-                         document.getElementById('loading-message').innerText = 'Nenhum dado encontrado na planilha.';
-                         return;
+                        document.getElementById('loading-message').innerText = 'Nenhum dado encontrado na planilha.';
+                        return;
                     }
                     
                     setupControls(allData);
                     
-                    const currentMonthIdentifier = getCurrentMonthIdentifier();
-                    renderChartForMonth(currentMonthIdentifier);
+                    // **AJUSTADO**: Carrega o último mês disponível na planilha por padrão
+                    const latestMonth = getLatestAvailableMonth(allData);
+                    if (latestMonth) {
+                        document.getElementById('month-selector').value = latestMonth;
+                        renderChartForMonth(latestMonth);
+                    } else {
+                        document.getElementById('loading-message').innerText = 'Nenhum mês válido encontrado nos dados.';
+                    }
 
                     document.getElementById('loading-message').style.display = 'none';
                     document.getElementById('controls-container').style.display = 'block';
@@ -237,14 +251,9 @@
             uniqueMonths.forEach(month => {
                 const option = document.createElement('option');
                 option.value = month;
-                option.textContent = month;
+                option.textContent = month.charAt(0).toUpperCase() + month.slice(1);
                 monthSelector.appendChild(option);
             });
-
-            const currentMonthIdentifier = getCurrentMonthIdentifier();
-            if (uniqueMonths.includes(currentMonthIdentifier)) {
-                monthSelector.value = currentMonthIdentifier;
-            }
 
             monthSelector.addEventListener('change', (e) => {
                 renderChartForMonth(e.target.value);
@@ -254,25 +263,52 @@
         function renderChartForMonth(monthIdentifier) {
             const monthData = allData.filter(item => item['Mês'] === monthIdentifier);
             const chartContainer = document.getElementById('org-chart-container');
-            chartContainer.innerHTML = ''; // Limpa o organograma anterior
+            chartContainer.innerHTML = '';
 
             if (monthData.length === 0) {
                 chartContainer.innerHTML = `<p class="text-center text-gray-500">Nenhum dado encontrado para ${monthIdentifier}.</p>`;
+                document.getElementById('info-mes').innerText = `Sem dados para: ${monthIdentifier}`;
                 return;
             }
 
             const hierarchy = buildHierarchy(monthData);
             chartContainer.appendChild(createOrgChart(hierarchy));
-
+            
             const [mes, ano] = monthIdentifier.split('/');
             document.getElementById('info-mes').innerText = `Exibindo dados de: ${mes.charAt(0).toUpperCase() + mes.slice(1)}/${ano}`;
         }
 
-        function getCurrentMonthIdentifier() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const monthName = now.toLocaleString('pt-BR', { month: 'long' });
-            return `${monthName}/${year}`;
+        /**
+         * **NOVO**: Encontra o mês mais recente com dados na planilha.
+         */
+        function getLatestAvailableMonth(data) {
+            const monthMap = {
+                'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
+                'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11
+            };
+
+            const uniqueMonths = [...new Set(data.map(item => item['Mês']).filter(Boolean))];
+            if (uniqueMonths.length === 0) return null;
+
+            let latestDate = null;
+            let latestMonthIdentifier = null;
+
+            uniqueMonths.forEach(monthIdentifier => {
+                const [monthName, year] = monthIdentifier.split('/');
+                if (monthName && year) {
+                    const monthNumber = monthMap[monthName.toLowerCase()];
+                    const yearNumber = parseInt(year);
+
+                    if (monthNumber !== undefined && !isNaN(yearNumber)) {
+                        const currentDate = new Date(yearNumber, monthNumber, 1);
+                        if (!latestDate || currentDate > latestDate) {
+                            latestDate = currentDate;
+                            latestMonthIdentifier = monthIdentifier;
+                        }
+                    }
+                }
+            });
+            return latestMonthIdentifier;
         }
 
         function parseCSV(text) {
@@ -292,33 +328,75 @@
             return result;
         }
 
+        /**
+         * **REESCRITO**: Constrói uma hierarquia dinâmica com múltiplos níveis.
+         */
         function buildHierarchy(data) {
             const root = { id: 'Young Empreendimentos', data: { 'Nível': 'Empresa' }, children: [] };
-            const map = new Map();
+            const nodeMap = new Map();
+            const dataMap = new Map();
 
+            // 1. Criar um nó para cada item único (Principal ou Subordinado)
             data.forEach(item => {
-                const principalId = item['Principal'];
-                if (!principalId) return; 
-
-                if (!map.has(principalId)) {
-                    const objectiveNode = { 
-                        id: principalId, 
-                        data: { 
-                            'Nível': 'Objetivo Estratégico',
-                            'Perspectiva': item['Perspectiva'],
-                            'Time': item['Time']
-                        }, 
-                        children: [] 
-                    };
-                    map.set(principalId, objectiveNode);
-                    root.children.push(objectiveNode);
+                if (item['Principal'] && !nodeMap.has(item['Principal'])) {
+                    nodeMap.set(item['Principal'], { id: item['Principal'], children: [] });
                 }
-                
-                const objectiveNode = map.get(principalId);
                 if (item['Subordinados']) {
-                    objectiveNode.children.push({ id: item['Subordinados'], data: item, children: [] });
+                    if (!nodeMap.has(item['Subordinados'])) {
+                        nodeMap.set(item['Subordinados'], { id: item['Subordinados'], children: [] });
+                    }
+                    // A "verdadeira" fonte de dados para um nó é a linha onde ele é um subordinado
+                    dataMap.set(item['Subordinados'], item);
                 }
             });
+
+            // 2. Conectar pais e filhos e identificar os nós raiz da hierarquia
+            const childNodes = new Set();
+            data.forEach(item => {
+                const parentId = item['Principal'];
+                const childId = item['Subordinados'];
+
+                if (parentId && childId && nodeMap.has(parentId) && nodeMap.has(childId)) {
+                    const parentNode = nodeMap.get(parentId);
+                    const childNode = nodeMap.get(childId);
+                    if (!parentNode.children.includes(childNode)) {
+                        parentNode.children.push(childNode);
+                    }
+                    childNodes.add(childId);
+                }
+            });
+
+            // 3. Atribuir os dados a cada nó
+            nodeMap.forEach((node, id) => {
+                node.data = dataMap.get(id) || { 'Nível': 'Objetivo Estratégico' };
+                // Se um nó só aparece como Principal, pegamos os dados da primeira linha onde ele aparece
+                if (!dataMap.has(id)) {
+                    const principalRow = data.find(d => d['Principal'] === id);
+                    if (principalRow) {
+                        node.data['Time'] = principalRow['Time'];
+                        node.data['Perspectiva'] = principalRow['Perspectiva'];
+                    }
+                }
+            });
+
+            // 4. Agrupar os nós raiz por Perspectiva
+            const perspectiveMap = new Map();
+            nodeMap.forEach((node, id) => {
+                // Um nó é raiz se não for filho de ninguém
+                if (!childNodes.has(id)) {
+                    const perspective = node.data['Perspectiva'] || 'Geral';
+                    if (!perspectiveMap.has(perspective)) {
+                        perspectiveMap.set(perspective, {
+                            id: perspective,
+                            data: { 'Nível': 'Perspectiva' },
+                            children: []
+                        });
+                    }
+                    perspectiveMap.get(perspective).children.push(node);
+                }
+            });
+            
+            root.children = Array.from(perspectiveMap.values());
             return root;
         }
 
@@ -336,7 +414,7 @@
 
             const level = document.createElement('div');
             level.className = 'node-level';
-            level.textContent = node.data['Time'] || node.data['Nível'];
+            level.textContent = node.data['Time'] || node.data['Nível'] || '';
             nodeContent.appendChild(level);
 
             const metaValue = node.data['Meta'];
@@ -351,8 +429,8 @@
                 kpi.textContent = `Meta: ${meta} | Resultado: ${resultado}`;
                 nodeContent.appendChild(kpi);
 
-                const metaNum = parseFloat(String(meta).replace('.', '').replace(',', '.'));
-                const resultadoNum = parseFloat(String(resultado).replace('.', '').replace(',', '.'));
+                const metaNum = parseFloat(String(meta).replace(/\./g, '').replace(',', '.'));
+                const resultadoNum = parseFloat(String(resultado).replace(/\./g, '').replace(',', '.'));
                 
                 if (!isNaN(metaNum) && !isNaN(resultadoNum)) {
                     let success = false;
@@ -361,15 +439,12 @@
                     } else {
                         success = resultadoNum >= metaNum;
                     }
-
-                    if (success) {
-                        nodeContent.style.backgroundColor = '#27ae60';
-                    } else {
-                        nodeContent.style.backgroundColor = '#c0392b';
-                    }
+                    nodeContent.style.backgroundColor = success ? '#27ae60' : '#c0392b';
                 }
             } else if (node.data['Nível'] === 'Objetivo Estratégico') {
                  nodeContent.style.backgroundColor = '#34495e';
+            } else if (node.data['Nível'] === 'Perspectiva') {
+                 nodeContent.style.backgroundColor = '#16a085';
             }
 
             orgNode.appendChild(nodeContent);
@@ -389,6 +464,7 @@
                 });
             } else {
                 orgNode.classList.add('leaf');
+                nodeContent.style.cursor = 'default';
             }
 
             if (node.data['Nível'] === 'Empresa') {
