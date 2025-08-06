@@ -26,27 +26,8 @@
             font-weight: 700;
         }
 
-        /* Contêiner para os controles, como o seletor de mês */
-        #controls-container {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-        }
-
-        #month-selector {
-            font-family: 'Be Vietnam Pro', sans-serif;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            background-color: #fff;
-        }
-
-        /* **AJUSTADO**: Estilos para os controles de zoom flutuantes */
-        #zoom-controls {
+        /* Estilos para o painel de controle flutuante (mês e zoom) */
+        #floating-controls {
             position: fixed;
             bottom: 20px;
             right: 20px;
@@ -56,9 +37,30 @@
             background-color: white;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            padding: 5px;
+            padding: 8px 12px;
         }
-        #zoom-controls button {
+        
+        #month-selector {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
+
+        .control-separator {
+            width: 1px;
+            height: 24px;
+            background-color: #e2e8f0;
+            margin: 0 12px;
+        }
+
+        #zoom-buttons {
+            display: flex;
+            align-items: center;
+        }
+
+        #zoom-buttons button {
             width: 40px;
             height: 40px;
             background-color: #f1f5f9;
@@ -72,7 +74,7 @@
             align-items: center;
             justify-content: center;
         }
-        #zoom-controls button:hover {
+        #zoom-buttons button:hover {
             background-color: #e2e8f0;
         }
         #zoom-out { border-radius: 6px 0 0 6px; }
@@ -90,7 +92,6 @@
             min-width: 60px;
             justify-content: center;
         }
-
 
         /* Contêiner principal do organograma, permite rolagem horizontal */
         #chart-container {
@@ -124,7 +125,7 @@
             border-radius: 8px;
             padding: 15px;
             width: 250px;
-            min-height: 110px;
+            min-height: 120px; /* Aumentado para caber o responsável */
             text-align: center;
             margin-bottom: 50px;
             cursor: pointer;
@@ -154,6 +155,31 @@
             font-size: 12px;
             color: #E0E0E0;
             margin-top: 4px;
+        }
+
+        /* Estilo para o nome do responsável */
+        .node-responsavel {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            font-size: 13px;
+            font-style: italic;
+            color: #f2f2f2;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .node-responsavel::before {
+            content: '';
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            background-color: #f2f2f2;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2.5a5.5 5.5 0 0 1 3.096 10.047 9.005 9.005 0 0 1 5.9 8.181.75.75 0 1 1-1.499.044 7.5 7.5 0 0 0-14.993 0 .75.75 0 0 1-1.5-.045 9.005 9.005 0 0 1 5.9-8.18A5.5 5.5 0 0 1 12 2.5ZM8 8a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2.5a5.5 5.5 0 0 1 3.096 10.047 9.005 9.005 0 0 1 5.9 8.181.75.75 0 1 1-1.499.044 7.5 7.5 0 0 0-14.993 0 .75.75 0 0 1-1.5-.045 9.005 9.005 0 0 1 5.9-8.18A5.5 5.5 0 0 1 12 2.5ZM8 8a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z'/%3E%3C/svg%3E");
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            mask-position: center;
         }
         
         .node-kpi {
@@ -248,22 +274,21 @@
         <p id="info-mes" class="text-gray-500 mt-2" style="font-family: 'Be Vietnam Pro', sans-serif;"></p>
     </header>
 
-    <div id="controls-container" style="display: none;">
-        <div>
-            <label for="month-selector" class="mr-2 font-semibold text-gray-700">Visualizar Mês:</label>
-            <select id="month-selector"></select>
-        </div>
-    </div>
-
     <main id="org-chart-container" class="w-full">
         <p id="loading-message" class="text-center">Carregando dados da planilha...</p>
     </main>
 
-    <!-- **AJUSTADO**: Controles de zoom movidos para fora do fluxo principal para se tornarem flutuantes -->
-    <div id="zoom-controls">
-        <button id="zoom-out" title="Minimizar">-</button>
-        <span id="zoom-level">100%</span>
-        <button id="zoom-in" title="Maximizar">+</button>
+    <div id="floating-controls" style="display: none;">
+        <div>
+            <label for="month-selector" class="mr-2 font-semibold text-gray-700 text-sm">Mês:</label>
+            <select id="month-selector"></select>
+        </div>
+        <div class="control-separator"></div>
+        <div id="zoom-buttons">
+            <button id="zoom-out" title="Minimizar">-</button>
+            <span id="zoom-level">100%</span>
+            <button id="zoom-in" title="Maximizar">+</button>
+        </div>
     </div>
 
     <script>
@@ -274,15 +299,18 @@
         document.addEventListener('DOMContentLoaded', () => {
             fetch(csvUrl)
                 .then(response => {
-                    if (!response.ok) throw new Error('Erro ao carregar a planilha.');
+                    if (!response.ok) throw new Error('Erro ao carregar a planilha (código: ' + response.status + ')');
                     return response.text();
                 })
                 .then(csvText => {
                     allData = parseCSV(csvText);
                     if (allData.length === 0) {
-                        document.getElementById('loading-message').innerText = 'Nenhum dado encontrado na planilha.';
+                        document.getElementById('loading-message').innerText = 'Nenhum dado encontrado na planilha. Verifique se a planilha não está vazia.';
                         return;
                     }
+                    
+                    document.getElementById('loading-message').style.display = 'none';
+                    document.getElementById('floating-controls').style.display = 'flex';
                     
                     setupControls(allData);
                     setupZoom();
@@ -299,16 +327,16 @@
                             document.getElementById('month-selector').value = latestMonth;
                             renderChartForMonth(latestMonth);
                         } else {
-                            document.getElementById('loading-message').innerText = 'Nenhum mês válido encontrado nos dados.';
+                             document.getElementById('info-mes').innerText = 'Nenhum mês válido foi encontrado nos dados.';
                         }
                     }
-
-                    document.getElementById('loading-message').style.display = 'none';
-                    document.getElementById('controls-container').style.display = 'flex';
                 })
                 .catch(error => {
-                    console.error('Erro:', error);
-                    document.getElementById('loading-message').innerText = `Falha ao carregar: ${error.message}`;
+                    const msgElement = document.getElementById('loading-message');
+                    msgElement.style.color = 'red';
+                    msgElement.style.fontWeight = 'bold';
+                    msgElement.innerText = `Ocorreu um erro: ${error.message}. Verifique o console (F12) para mais detalhes e a formatação da planilha.`;
+                    console.error('Erro detalhado:', error);
                 });
         });
         
@@ -334,12 +362,12 @@
             const zoomOutBtn = document.getElementById('zoom-out');
 
             zoomInBtn.addEventListener('click', () => {
-                currentZoom = Math.min(2.0, currentZoom + 0.1); // Limite máximo de 200%
+                currentZoom = Math.min(2.0, currentZoom + 0.1);
                 applyZoom();
             });
 
             zoomOutBtn.addEventListener('click', () => {
-                currentZoom = Math.max(0.3, currentZoom - 0.1); // Limite mínimo de 30%
+                currentZoom = Math.max(0.3, currentZoom - 0.1);
                 applyZoom();
             });
         }
@@ -350,7 +378,6 @@
             chartContainer.style.transform = `scale(${currentZoom})`;
             zoomLevelSpan.textContent = `${Math.round(currentZoom * 100)}%`;
         }
-
 
         function renderChartForMonth(monthIdentifier) {
             const monthData = allData.filter(item => item['Mês'] === monthIdentifier);
@@ -401,83 +428,111 @@
         }
 
         function parseCSV(text) {
-            const lines = text.replace(/\r/g, '').split('\n');
+            const lines = text.trim().replace(/\r/g, '').split('\n');
             if (lines.length < 2) return [];
-            const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+            const header = lines.shift().split(',').map(h => h.trim().replace(/^"|"$/g, ''));
             const result = [];
-            for (let i = 1; i < lines.length; i++) {
-                if (!lines[i]) continue;
+            
+            const regex = /,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/;
+
+            for (const line of lines) {
+                if (!line) continue;
+
+                const values = line.split(regex);
                 const obj = {};
-                const currentline = lines[i].split(',');
-                for (let j = 0; j < header.length; j++) {
-                    obj[header[j]] = currentline[j] ? currentline[j].trim().replace(/"/g, '') : '';
+
+                for (let i = 0; i < header.length; i++) {
+                    if (header[i]) {
+                        let value = (values[i] || '').trim();
+                        if (value.startsWith('"') && value.endsWith('"')) {
+                            value = value.substring(1, value.length - 1);
+                        }
+                        obj[header[i]] = value.replace(/""/g, '"');
+                    }
                 }
                 result.push(obj);
             }
             return result;
         }
 
+        /**
+         * **REESCRITO**: Constrói a hierarquia de forma recursiva e contextual.
+         * Esta versão garante que os dados de um nó (como o responsável) venham
+         * da linha exata que define sua relação com o pai, evitando o problema de sobrescrita.
+         */
         function buildHierarchy(data) {
             const root = { id: 'Young Empreendimentos', data: { 'Nível': 'Empresa' }, children: [] };
-            const nodeMap = new Map();
-            const dataMap = new Map();
+
+            // Mapa para agrupar todos os filhos sob seu respectivo pai.
+            const parentMap = new Map();
+            // Mapa para guardar os dados de itens que aparecem como Principais.
+            const principalDataMap = new Map();
 
             data.forEach(item => {
-                if (item['Principal'] && !nodeMap.has(item['Principal'])) {
-                    nodeMap.set(item['Principal'], { id: item['Principal'], children: [] });
+                const principal = item['Principal'];
+                if (!principal) return;
+
+                if (!parentMap.has(principal)) {
+                    parentMap.set(principal, []);
                 }
-                if (item['Subordinados']) {
-                    if (!nodeMap.has(item['Subordinados'])) {
-                        nodeMap.set(item['Subordinados'], { id: item['Subordinados'], children: [] });
-                    }
-                    dataMap.set(item['Subordinados'], item);
+                // Armazena o subordinado junto com os dados da sua linha específica.
+                parentMap.get(principal).push({
+                    id: item['Subordinados'],
+                    data: item 
+                });
+
+                if (!principalDataMap.has(principal)) {
+                    principalDataMap.set(principal, item);
                 }
             });
 
-            const childNodes = new Set();
+            // Função recursiva que constrói a árvore.
+            const buildTree = (nodeId, nodeData) => {
+                const node = {
+                    id: nodeId,
+                    data: nodeData,
+                    children: []
+                };
+
+                const childrenOfNode = parentMap.get(nodeId);
+                if (childrenOfNode) {
+                    node.children = childrenOfNode.map(child => buildTree(child.id, child.data));
+                }
+                return node;
+            };
+
+            // Identifica os nós raiz (que são Principais, mas nunca Subordinados).
+            const allSubordinates = new Set(data.map(item => item['Subordinados']).filter(Boolean));
+            const rootPrincipals = new Set();
             data.forEach(item => {
-                const parentId = item['Principal'];
-                const childId = item['Subordinados'];
-
-                if (parentId && childId && nodeMap.has(parentId) && nodeMap.has(childId)) {
-                    const parentNode = nodeMap.get(parentId);
-                    const childNode = nodeMap.get(childId);
-                    if (!parentNode.children.includes(childNode)) {
-                        parentNode.children.push(childNode);
-                    }
-                    childNodes.add(childId);
-                }
-            });
-
-            nodeMap.forEach((node, id) => {
-                node.data = dataMap.get(id) || { 'Nível': 'Objetivo Estratégico' };
-                if (!dataMap.has(id)) {
-                    const principalRow = data.find(d => d['Principal'] === id);
-                    if (principalRow) {
-                        node.data['Time'] = principalRow['Time'];
-                        node.data['Perspectiva'] = principalRow['Perspectiva'];
-                    }
-                }
-            });
-
-            const perspectiveMap = new Map();
-            nodeMap.forEach((node, id) => {
-                if (!childNodes.has(id)) {
-                    const perspective = node.data['Perspectiva'] || 'Geral';
-                    if (!perspectiveMap.has(perspective)) {
-                        perspectiveMap.set(perspective, {
-                            id: perspective,
-                            data: { 'Nível': 'Perspectiva' },
-                            children: []
-                        });
-                    }
-                    perspectiveMap.get(perspective).children.push(node);
+                if (item['Principal'] && !allSubordinates.has(item['Principal'])) {
+                    rootPrincipals.add(item['Principal']);
                 }
             });
             
+            // Agrupa os nós raiz por Perspectiva.
+            const perspectiveMap = new Map();
+            rootPrincipals.forEach(principalId => {
+                // Pega os dados da primeira vez que este principal apareceu.
+                const dataForRow = principalDataMap.get(principalId);
+                const perspective = dataForRow['Perspectiva'] || 'Geral';
+
+                if (!perspectiveMap.has(perspective)) {
+                    perspectiveMap.set(perspective, {
+                        id: perspective,
+                        data: { 'Nível': 'Perspectiva' },
+                        children: []
+                    });
+                }
+                // Inicia a construção da árvore a partir deste nó raiz.
+                perspectiveMap.get(perspective).children.push(buildTree(principalId, dataForRow));
+            });
+
             root.children = Array.from(perspectiveMap.values());
             return root;
         }
+
 
         function createOrgChart(node) {
             const orgNode = document.createElement('div');
@@ -500,7 +555,16 @@
             const resultadoValue = node.data['Resultados'];
             const metrica = (node.data['Métrica'] || '').toLowerCase();
 
+            // O responsável só é adicionado se o nó tiver Meta ou Resultado
             if (metaValue || resultadoValue) {
+                const responsavel = node.data['Responsável'];
+                if (responsavel) {
+                    const responsavelEl = document.createElement('div');
+                    responsavelEl.className = 'node-responsavel';
+                    responsavelEl.textContent = responsavel;
+                    nodeContent.appendChild(responsavelEl);
+                }
+
                 const kpi = document.createElement('div');
                 kpi.className = 'node-kpi';
                 const meta = metaValue || '-';
